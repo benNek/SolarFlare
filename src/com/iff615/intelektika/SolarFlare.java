@@ -2,24 +2,22 @@ package src.com.iff615.intelektika;
 
 public class SolarFlare {
 
-    private final ZurichClass zurichClass;
-    private final SpotSize spotSize;
-    private final SpotDistribution distribution;
-    private final Activity activity;
-    private final Evolution evolution;
+    private final int zurichClass;
+    private final int spotSize;
+    private final int distribution;
+    private final int activity;
+    private final int evolution;
     private final int activityCode;
-    private final boolean complex;
-    private final boolean becameComplex;
-    private final Area area;
-    private final Area largestSpotArea;
+    private final int complex;
+    private final int becameComplex;
+    private final int area;
+    private final int largestSpotArea;
+    private int[] count;
+    private int[] guessedCount;
 
-    private int cCount;
-    private int mCount;
-    private int xCount;
-
-    public SolarFlare(ZurichClass zurichClass, SpotSize spotSize, SpotDistribution distribution, Activity activity,
-                      Evolution evolution, int activityCode, boolean complex, boolean becameComplex, Area area,
-                      Area largestSpotArea, int cCount, int mCount, int xCount) {
+    public SolarFlare(int zurichClass, int spotSize, int distribution, int activity,
+                      int evolution, int activityCode, int complex, int becameComplex, int area,
+                      int largestSpotArea, int[] count) {
         this.zurichClass = zurichClass;
         this.spotSize = spotSize;
         this.distribution = distribution;
@@ -30,28 +28,27 @@ public class SolarFlare {
         this.becameComplex = becameComplex;
         this.area = area;
         this.largestSpotArea = largestSpotArea;
-        this.cCount = cCount;
-        this.mCount = mCount;
-        this.xCount = xCount;
+        this.count = count;
+        this.guessedCount = new int[SolarFlaresRegression.FLARES_COUNT];
     }
 
-    public ZurichClass getZurichClass() {
+    public int getZurichClass() {
         return zurichClass;
     }
 
-    public SpotSize getSpotSize() {
+    public int getSpotSize() {
         return spotSize;
     }
 
-    public SpotDistribution getDistribution() {
+    public int getDistribution() {
         return distribution;
     }
 
-    public Activity getActivity() {
+    public int getActivity() {
         return activity;
     }
 
-    public Evolution getEvolution() {
+    public int getEvolution() {
         return evolution;
     }
 
@@ -59,19 +56,31 @@ public class SolarFlare {
         return activityCode;
     }
 
-    public boolean isComplex() {
+    public int isComplex() {
         return complex;
     }
 
-    public boolean isBecameComplex() {
+    public int isBecameComplex() {
         return becameComplex;
     }
 
-    public Area getArea() {
+    public int getArea() {
         return area;
     }
 
-    public Area getLargestSpotArea() {
+    public int getLargestSpotArea() {
         return largestSpotArea;
+    }
+
+    public int getCount(int flareClass) {
+        return count[flareClass];
+    }
+
+    public void setGuessedCount(int flareClass, int guessedCount) {
+        this.guessedCount[flareClass] = guessedCount;
+    }
+
+    public int getGuessedCount(int flareClass) {
+        return guessedCount[flareClass];
     }
 }
