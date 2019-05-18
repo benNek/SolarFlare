@@ -12,12 +12,12 @@ public class MultipleLinearRegression {
     private double[] sst;
 
     public MultipleLinearRegression(List<SolarFlare> flares) {
-        Matrix matrixX = new Matrix(getX(flares));
+        Matrix matrixX = new Matrix(SolarFlaresRegression.getX(flares));
         beta = new Matrix[SolarFlaresRegression.FLARES_COUNT];
         sse = new double[SolarFlaresRegression.FLARES_COUNT];
         sst = new double[SolarFlaresRegression.FLARES_COUNT];
         for (int flareClass = 0; flareClass < SolarFlaresRegression.FLARES_COUNT; flareClass++) {
-            double[] y = getY(flareClass, flares);
+            double[] y = SolarFlaresRegression.getY(flareClass, flares);
             int n = y.length;
 
             Matrix matrixY = new Matrix(y, n);
@@ -40,30 +40,14 @@ public class MultipleLinearRegression {
         }
     }
 
-    private double[][] getX(List<SolarFlare> flares) {
-        double[][] x = new double[flares.size()][SolarFlaresRegression.N];
-        for (int i = 0; i < flares.size(); i++) {
-            SolarFlare flare = flares.get(i);
-            x[i][0] = flare.getZurichClass();
-            x[i][1] = flare.getSpotSize();
-            x[i][2] = flare.getDistribution();
-            x[i][3] = flare.getActivity();
-            x[i][4] = flare.getEvolution();
-            x[i][5] = flare.getActivityCode();
-            x[i][6] = flare.isComplex();
-            x[i][7] = flare.isBecameComplex();
-            x[i][8] = flare.getArea();
-            x[i][9] = flare.getLargestSpotArea();
+    public double[][] beta() {
+        double[][] betaValues = new double[SolarFlaresRegression.FLARES_COUNT][SolarFlaresRegression.N];
+        for (int flareClass = 0; flareClass < SolarFlaresRegression.FLARES_COUNT; flareClass++) {
+            for (int i = 0; i < SolarFlaresRegression.N; i++) {
+                betaValues[flareClass][i] = beta(flareClass, i);
+            }
         }
-        return x;
-    }
-
-    private double[] getY(int flareClass, List<SolarFlare> flares) {
-        double[] y = new double[flares.size()];
-        for (int i = 0; i < flares.size(); i++) {
-            y[i] = flares.get(i).getCount(flareClass);
-        }
-        return y;
+        return betaValues;
     }
 
     public double beta(int flareClass, int j) {

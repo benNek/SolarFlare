@@ -1,5 +1,7 @@
 package src.com.iff615.intelektika;
 
+import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression;
+
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -25,41 +27,32 @@ public class SolarFlaresRegression {
     }
 
     private void run() {
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Choose method: ");
+        System.out.println("1 - Fully programmed method");
+        System.out.println("2 - Apache commons math OLSMultipleLinearRegression method");
+        int type = scanner.nextInt();
+
         List<SolarFlare> allFlares = readAllFlares();
         double totalAccuracy = 0;
         for (int segment = 0; segment < SEGMENT_COUNT; segment++) {
             System.out.println("--- SEGMENT " + (segment + 1) + " ---");
             List<SolarFlare> trainingFlares = getTrainingFlares(allFlares, segment);
-            MultipleLinearRegression regression = new MultipleLinearRegression(trainingFlares);
-
             List<SolarFlare> testingFlares = getTestingFlares(allFlares, segment);
-            AtomicInteger correctGuesses = new AtomicInteger();
-            testingFlares
-                    .forEach(flare -> {
-                        for (int flareClass = 0; flareClass < FLARES_COUNT; flareClass++) {
-                            int count = (int) Math.round(regression.beta(flareClass, 0) * flare.getZurichClass()
-                                    + regression.beta(flareClass, 1) * flare.getSpotSize()
-                                    + regression.beta(flareClass, 2) * flare.getDistribution()
-                                    + regression.beta(flareClass, 3) * flare.getActivity()
-                                    + regression.beta(flareClass, 4) * flare.getEvolution()
-                                    + regression.beta(flareClass, 5) * flare.getActivityCode()
-                                    + regression.beta(flareClass, 6) * flare.isComplex()
-                                    + regression.beta(flareClass, 7) * flare.isBecameComplex()
-                                    + regression.beta(flareClass, 8) * flare.getArea()
-                                    + regression.beta(flareClass, 9) * flare.getLargestSpotArea());
-                            flare.setGuessedCount(flareClass, count);
 
-                            if (count == flare.getCount(flareClass)) {
-                                correctGuesses.getAndIncrement();
-                            }
-                        }
-                    });
-            double accuracy = round((double) correctGuesses.get() / (allFlares.size() * FLARES_COUNT) * 100);
-            System.out.println("Accuracy: " + accuracy + "%, R2: " + round(regression.R2()));
+            int correctGuesses = 0;
+            if (type == 1) {
+                correctGuesses = fullyProgrammedMethod(trainingFlares, testingFlares);
+            } else if (type == 2) {
+                correctGuesses = getOLSENRegression(trainingFlares, testingFlares);
+            }
+
+            double accuracy = round((double) correctGuesses / (testingFlares.size() * FLARES_COUNT) * 100);
+            System.out.println("Accuracy: " + accuracy);
             totalAccuracy += accuracy;
         }
         totalAccuracy /= SEGMENT_COUNT;
-        System.out.println("\nTotal accuracy: " + totalAccuracy + "%");
+        System.out.println("\nTotal accuracy: " + round(totalAccuracy) + "%");
 
     }
 
@@ -116,6 +109,78 @@ public class SolarFlaresRegression {
 
     private double round(double x) {
         return Math.round(x * 1000.0) / 1000.0;
+    }
+
+    private int fullyProgrammedMethod(List<SolarFlare> trainingFlares, List<SolarFlare> testingFlares) {
+        MultipleLinearRegression regression = new MultipleLinearRegression(trainingFlares);
+        return getCorrectGuesses(testingFlares, regression.beta());
+    }
+
+    private int getOLSENRegression(List<SolarFlare> trainingFlares, List<SolarFlare> testingFlares) {
+        OLSMultipleLinearRegression regression = new OLSMultipleLinearRegression();
+        regression.setNoIntercept(true);
+
+        double[][] beta = new double[FLARES_COUNT][N];
+        for (int flareClass = 0; flareClass < FLARES_COUNT; flareClass++) {
+            regression.newSampleData(getY(0, trainingFlares), getX(trainingFlares));
+            beta[flareClass] = regression.estimateRegressionParameters();
+        }
+
+        return getCorrectGuesses(testingFlares, beta);
+    }
+
+    public static double[][] getX(List<SolarFlare> flares) {
+        double[][] x = new double[flares.size()][SolarFlaresRegression.N];
+        for (int i = 0; i < flares.size(); i++) {
+            SolarFlare flare = flares.get(i);
+            x[i][0] = flare.getZurichClass();
+            x[i][1] = flare.getSpotSize();
+            x[i][2] = flare.getDistribution();
+            x[i][3] = flare.getActivity();
+            x[i][4] = flare.getEvolution();
+            x[i][5] = flare.getActivityCode();
+            x[i][6] = flare.isComplex();
+            x[i][7] = flare.isBecameComplex();
+            x[i][8] = flare.getArea();
+            x[i][9] = flare.getLargestSpotArea();
+        }
+        return x;
+    }
+
+    public static double[] getY(int flareClass, List<SolarFlare> flares) {
+        double[] y = new double[flares.size()];
+        for (int i = 0; i < flares.size(); i++) {
+            y[i] = flares.get(i).getCount(flareClass);
+        }
+        return y;
+    }
+
+    private int getCorrectGuesses(List<SolarFlare> flares, double[][] beta) {
+        AtomicInteger correctGuesses = new AtomicInteger();
+        flares.forEach(flare -> {
+            for (int flareClass = 0; flareClass < FLARES_COUNT; flareClass++) {
+                int count = getSolarFlaresCount(beta[flareClass], flare);
+                flare.setGuessedCount(flareClass, count);
+
+                if (count == flare.getCount(flareClass)) {
+                    correctGuesses.getAndIncrement();
+                }
+            }
+        });
+        return correctGuesses.get();
+    }
+
+    private int getSolarFlaresCount(double[] beta, SolarFlare flare) {
+        return (int) Math.round(beta[0] * flare.getZurichClass()
+                + beta[1] * flare.getSpotSize()
+                + beta[2] * flare.getDistribution()
+                + beta[3] * flare.getActivity()
+                + beta[4] * flare.getEvolution()
+                + beta[5] * flare.getActivityCode()
+                + beta[6] * flare.isComplex()
+                + beta[7] * flare.isBecameComplex()
+                + beta[8] * flare.getArea()
+                + beta[9] * flare.getLargestSpotArea());
     }
 
 }
