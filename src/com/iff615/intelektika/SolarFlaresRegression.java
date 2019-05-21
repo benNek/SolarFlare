@@ -1,12 +1,15 @@
 package src.com.iff615.intelektika;
 
+import org.apache.commons.math3.linear.EigenDecomposition;
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.stat.correlation.Covariance;
 import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression;
+import org.apache.commons.math3.util.Pair;
 
 import java.io.IOException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -14,13 +17,16 @@ import java.util.stream.Stream;
 public class SolarFlaresRegression {
 
     // Koeficientu kiekis
-    public static final int N = 10;
+    public static int N = 10;
 
     // Flares klasiu kiekis (C, M, X), NEKEISTI!
     public static final int FLARES_COUNT = 3;
 
     private static final String DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/solar-flare/flare.data2";
     private static final int SEGMENT_COUNT = 10;
+    private static final double DIMENSIONALITY_REDUCTION_THRESHOLD = 0.07;
+
+    double r2 = 0;
 
     public static void main(String[] args) {
         new SolarFlaresRegression().run();
@@ -29,11 +35,12 @@ public class SolarFlaresRegression {
     private void run() {
         Scanner scanner = new Scanner(System.in);
         System.out.println("Choose method: ");
-        System.out.println("1 - Fully programmed method");
+        System.out.println("1 - OLS regression");
         System.out.println("2 - Apache commons math OLSMultipleLinearRegression method");
         int type = scanner.nextInt();
 
         List<SolarFlare> allFlares = readAllFlares();
+        dimensionalityReduction(allFlares);
         double totalAccuracy = 0;
         for (int segment = 0; segment < SEGMENT_COUNT; segment++) {
             System.out.println("--- SEGMENT " + (segment + 1) + " ---");
@@ -53,6 +60,7 @@ public class SolarFlaresRegression {
         }
         totalAccuracy /= SEGMENT_COUNT;
         System.out.println("\nTotal accuracy: " + round(totalAccuracy) + "%");
+        System.out.println("R2 = " + round(r2 / SEGMENT_COUNT));
 
     }
 
@@ -62,7 +70,7 @@ public class SolarFlaresRegression {
             URL url = new URL(DATA_URL);
             Scanner scanner = new Scanner(url.openStream());
             scanner.useDelimiter("\n");
-            // first line is comment, skipping it
+            // first line is a comment, skipping it
             scanner.next();
             while (scanner.hasNext()) {
                 String[] parts = scanner.next().split(" ");
@@ -72,6 +80,35 @@ public class SolarFlaresRegression {
             e.printStackTrace();
         }
         return flares;
+    }
+
+    private void dimensionalityReduction(List<SolarFlare> flares) {
+        double[][] data = getX(flares);
+        RealMatrix realMatrix = MatrixUtils.createRealMatrix(data);
+
+        Covariance covariance = new Covariance(realMatrix);
+        RealMatrix covarianceMatrix = covariance.getCovarianceMatrix();
+        EigenDecomposition ed = new EigenDecomposition(covarianceMatrix);
+
+        List<Pair<Integer, Double>> averages = new ArrayList<>();
+        for (int i = 0; i < N; i++) {
+            double avg = 0;
+            for (int j = 0; j < ed.getEigenvector(i).getDimension(); j++) {
+                avg += ed.getEigenvector(i).getEntry(j);
+            }
+            averages.add(Pair.create(i, Math.abs(avg / ed.getEigenvector(i).getDimension())));
+        }
+        List<Integer> ids = averages.stream()
+                .sorted(Comparator.comparing(Pair::getSecond))
+                .filter(pair -> pair.getSecond() <= DIMENSIONALITY_REDUCTION_THRESHOLD)
+                .map(Pair::getFirst)
+                .sorted(Collections.reverseOrder())
+                .collect(Collectors.toList());
+
+        for (SolarFlare flare : flares) {
+            flare.reconstructData(ids);
+        }
+        N -= ids.size();
     }
 
     private List<SolarFlare> getTrainingFlares(List<SolarFlare> allFlares, int segment) {
@@ -113,6 +150,7 @@ public class SolarFlaresRegression {
 
     private int fullyProgrammedMethod(List<SolarFlare> trainingFlares, List<SolarFlare> testingFlares) {
         MultipleLinearRegression regression = new MultipleLinearRegression(trainingFlares);
+        r2 += regression.R2();
         return getCorrectGuesses(testingFlares, regression.beta());
     }
 
@@ -126,6 +164,7 @@ public class SolarFlaresRegression {
             beta[flareClass] = regression.estimateRegressionParameters();
         }
 
+        r2 += regression.calculateRSquared();
         return getCorrectGuesses(testingFlares, beta);
     }
 
@@ -133,16 +172,9 @@ public class SolarFlaresRegression {
         double[][] x = new double[flares.size()][SolarFlaresRegression.N];
         for (int i = 0; i < flares.size(); i++) {
             SolarFlare flare = flares.get(i);
-            x[i][0] = flare.getZurichClass();
-            x[i][1] = flare.getSpotSize();
-            x[i][2] = flare.getDistribution();
-            x[i][3] = flare.getActivity();
-            x[i][4] = flare.getEvolution();
-            x[i][5] = flare.getActivityCode();
-            x[i][6] = flare.isComplex();
-            x[i][7] = flare.isBecameComplex();
-            x[i][8] = flare.getArea();
-            x[i][9] = flare.getLargestSpotArea();
+            for (int j = 0; j < N; j++) {
+                x[i][j] = flare.getData(j);
+            }
         }
         return x;
     }
@@ -171,16 +203,11 @@ public class SolarFlaresRegression {
     }
 
     private int getSolarFlaresCount(double[] beta, SolarFlare flare) {
-        return (int) Math.round(beta[0] * flare.getZurichClass()
-                + beta[1] * flare.getSpotSize()
-                + beta[2] * flare.getDistribution()
-                + beta[3] * flare.getActivity()
-                + beta[4] * flare.getEvolution()
-                + beta[5] * flare.getActivityCode()
-                + beta[6] * flare.isComplex()
-                + beta[7] * flare.isBecameComplex()
-                + beta[8] * flare.getArea()
-                + beta[9] * flare.getLargestSpotArea());
+        double value = 0;
+        for (int i = 0; i < N; i++) {
+            value += beta[i] * flare.getData(i);
+        }
+        return (int) Math.round(value);
     }
 
 }
