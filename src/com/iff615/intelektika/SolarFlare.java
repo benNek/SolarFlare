@@ -42,4 +42,8 @@ public class SolarFlare {
     public double getData(int index) {
         return data[index];
     }
+
+    public void setData(int index, double value) {
+        data[index] = value;
+    }
 }

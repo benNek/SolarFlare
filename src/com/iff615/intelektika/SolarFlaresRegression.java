@@ -24,7 +24,7 @@ public class SolarFlaresRegression {
 
     private static final String DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/solar-flare/flare.data2";
     private static final int SEGMENT_COUNT = 10;
-    private static final double DIMENSIONALITY_REDUCTION_THRESHOLD = 0.07;
+    private static final double DIMENSIONALITY_REDUCTION_THRESHOLD = 1;
 
     double r2 = 0;
 
@@ -60,7 +60,7 @@ public class SolarFlaresRegression {
         }
         totalAccuracy /= SEGMENT_COUNT;
         System.out.println("\nTotal accuracy: " + round(totalAccuracy) + "%");
-        System.out.println("R2 = " + round(r2 / SEGMENT_COUNT));
+        System.out.println("R2 = " + round(r2 / SEGMENT_COUNT * 100));
 
     }
 
@@ -90,20 +90,20 @@ public class SolarFlaresRegression {
         RealMatrix covarianceMatrix = covariance.getCovarianceMatrix();
         EigenDecomposition ed = new EigenDecomposition(covarianceMatrix);
 
-        List<Pair<Integer, Double>> averages = new ArrayList<>();
+        List<Integer> ids = new ArrayList<>();
         for (int i = 0; i < N; i++) {
-            double avg = 0;
-            for (int j = 0; j < ed.getEigenvector(i).getDimension(); j++) {
-                avg += ed.getEigenvector(i).getEntry(j);
+            double sum = Arrays.stream(ed.getRealEigenvalues()).sum();
+            double percent = ed.getRealEigenvalue(i) / sum * 100;
+            if (percent < 1) {
+                ids.add(i);
             }
-            averages.add(Pair.create(i, Math.abs(avg / ed.getEigenvector(i).getDimension())));
         }
-        List<Integer> ids = averages.stream()
-                .sorted(Comparator.comparing(Pair::getSecond))
-                .filter(pair -> pair.getSecond() <= DIMENSIONALITY_REDUCTION_THRESHOLD)
-                .map(Pair::getFirst)
-                .sorted(Collections.reverseOrder())
-                .collect(Collectors.toList());
+
+        for (int i = 0; i < flares.size(); i++) {
+            for (int j = 0; j < N; j++) {
+                flares.get(i).setData(j, ed.getRealEigenvalue(j) * flares.get(i).getData(j));
+            }
+        }
 
         for (SolarFlare flare : flares) {
             flare.reconstructData(ids);
