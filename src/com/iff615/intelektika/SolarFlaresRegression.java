@@ -94,7 +94,7 @@ public class SolarFlaresRegression {
         for (int i = 0; i < N; i++) {
             double sum = Arrays.stream(ed.getRealEigenvalues()).sum();
             double percent = ed.getRealEigenvalue(i) / sum * 100;
-            if (percent < 1) {
+            if (percent < DIMENSIONALITY_REDUCTION_THRESHOLD) {
                 ids.add(i);
             }
         }
@@ -108,6 +108,7 @@ public class SolarFlaresRegression {
         for (SolarFlare flare : flares) {
             flare.reconstructData(ids);
         }
+        System.out.println(ids.size() + " variables were removed");
         N -= ids.size();
     }
 
